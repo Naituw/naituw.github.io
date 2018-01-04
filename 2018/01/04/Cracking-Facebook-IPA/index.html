@@ -1,0 +1,41 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><title> Cracking Facebook IPA · Naituw</title><meta name="description" content="Cracking Facebook IPA - Wu Tian"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="/favicon.png"><link rel="stylesheet" href="/css/apollo.css"><link rel="search" type="application/opensearchdescription+xml" href="http://naituw.github.io/atom.xml" title="Naituw"></head><body><div class="wrap"><header><a href="/" class="logo-link"><img src="/favicon.png" alt="logo"></a><ul class="nav nav-list"><li class="nav-list-item"><a href="/" target="_self" class="nav-list-link">BLOG</a></li><li class="nav-list-item"><a href="/archives/" target="_self" class="nav-list-link">ARCHIVE</a></li><li class="nav-list-item"><a href="http://weibo.com/naituw" target="_blank" class="nav-list-link">WEIBO</a></li><li class="nav-list-item"><a href="https://github.com/Naituw" target="_blank" class="nav-list-link">GITHUB</a></li><li class="nav-list-item"><a href="/atom.xml" target="_self" class="nav-list-link">RSS</a></li></ul></header><main class="container"><div class="post"><article class="post-block"><h1 class="post-title">Cracking Facebook IPA</h1><div class="post-info">Jan 4, 2018</div><div class="post-content"><p><img src="http://wx1.sinaimg.cn/large/69c30c5fly1fn4eld0mekj20oi08aq37.jpg" alt=""></p>
+<p>iPhoneCake 上提供的砸壳 IPA 只对启动时加载的 Framework 进行了 dump，导致在使用某些功能时可能因为 Framework 未找到而 crash，我给他们<a href="https://forum.iphonecake.com/index.php?/topic/324827-facebook-1380-by-ghay-free-app/?p=420262" target="_blank" rel="noopener">提过这个问题和解决方法</a>，但一直都没有解决。</p>
+<p>所以每次想在 <a href="https://github.com/Naituw/IPAPatch" target="_blank" rel="noopener">IPAPatch</a> 上使用最新版 Facebook 时，只能自行进行砸壳：</p>
+<a id="more"></a>
+<h2 id="环境"><a href="#环境" class="headerlink" title="环境"></a>环境</h2><ul>
+<li>越狱的 64位 iOS 设备 (iPhone 5s 或以上)</li>
+<li>Facebook 目前要求 iOS 8 以上</li>
+</ul>
+<h2 id="过程"><a href="#过程" class="headerlink" title="过程"></a>过程</h2><ol>
+<li>iPhone 在 Cydia 安装 <code>openssh</code> 等常用工具，在 AppStore 安装最新版本 <code>Facebook</code>，并运行一下</li>
+<li><p>编译 <a href="https://github.com/Naituw/dumpdecrypted" target="_blank" rel="noopener">https://github.com/Naituw/dumpdecrypted</a> ，该版本会自动 dump 动态链接库</p>
+ <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ make</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>通过 ssh/scp 将 dumpdecrypted.dylib 文件传输到 iPhone 上</p>
+ <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ scp dumpdecrypted.dylib root@123.123.123.123:/usr/lib/</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>进行砸壳</p>
+<ol>
+<li><p>定位 Facebook 二进制文件路径</p>
+ <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ps -e | grep Facebook</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>注入 dumpdecreypted.dylib 并导出砸壳文件</p>
+ <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># su root</span></span><br><span class="line">$ <span class="built_in">cd</span> /private/var</span><br><span class="line">$ chmod a+rx /usr/lib/dumpdecrypted.dylib</span><br><span class="line">$ DYLD_INSERT_LIBRARIES=/usr/lib/dumpdecrypted.dylib /var/containers/Bundle/Application/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx/Facebook.app/Facebook</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>打包输出文件</p>
+ <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ zip -r facebook.zip Facebook.decrypted Frameworks/</span><br></pre></td></tr></table></figure>
+</li>
+</ol>
+</li>
+<li><p>将砸壳输出的文件通过 ssh/scp 传输到 Mac 上</p>
+ <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ scp root@123.123.123.123:/private/var/facebook.zip ~/Downloads/facebook.zip</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>解压原始 Facebook ipa 文件，用砸壳文件替换 bundle 内对应文件</p>
+<blockquote>
+<p>原始 IPA 文件可以通过 Apple Configurator 2 下载： <a href="https://emm.how/t/downloading-ipa-file-from-app-store-onto-a-mac/525" target="_blank" rel="noopener">https://emm.how/t/downloading-ipa-file-from-app-store-onto-a-mac/525</a></p>
+</blockquote>
+</li>
+<li><p>打包 Payload 文件夹生成最终 IPA 文件</p>
+</li>
+</ol>
+</div></article></div></main><footer><div class="paginator"></div><div class="copyright"><p>© 2018 <a href="http://naituw.github.io">Wu Tian</a>, powered by <a href="https://hexo.io/" target="_blank">Hexo</a> and <a href="https://github.com/pinggod/hexo-theme-apollo" target="_blank">hexo-theme-apollo</a>.</p></div></footer></div><script async src="//cdn.bootcss.com/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML" integrity="sha384-crwIf/BuaWM9rM65iM+dWFldgQ1Un8jWZMuh3puxb8TOY9+linwLoI7ZHZT+aekW" crossorigin="anonymous"></script></body></html>
