@@ -1,0 +1,109 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><title> Maipo 的热更新机制 · Naituw</title><meta name="description" content="Maipo 的热更新机制 - Wu Tian"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="/favicon.png"><link rel="stylesheet" href="/css/apollo.css"><link rel="search" type="application/opensearchdescription+xml" href="http://naituw.github.io/atom.xml" title="Naituw"></head><body><div class="wrap"><header><a href="/" class="logo-link"><img src="/favicon.png" alt="logo"></a><ul class="nav nav-list"><li class="nav-list-item"><a href="/" target="_self" class="nav-list-link">BLOG</a></li><li class="nav-list-item"><a href="/archives/" target="_self" class="nav-list-link">ARCHIVE</a></li><li class="nav-list-item"><a href="http://weibo.com/naituw" target="_blank" class="nav-list-link">WEIBO</a></li><li class="nav-list-item"><a href="https://github.com/Naituw" target="_blank" class="nav-list-link">GITHUB</a></li><li class="nav-list-item"><a href="/atom.xml" target="_self" class="nav-list-link">RSS</a></li></ul></header><main class="container"><div class="post"><article class="post-block"><h1 class="post-title">Maipo 的热更新机制</h1><div class="post-info">Feb 1, 2018</div><div class="post-content"><p><img src="http://wx1.sinaimg.cn/large/69c30c5fly1fo1darhmptj21fc0hc136.jpg" alt="post"></p>
+<p>很长一段时间来，Maipo/WeiboX 的 Bug 修复方式，只有“在 AppStore 发布版本更新”一种，在热更新这么热门的今天显得有些落伍，主要原因还是精力不足：</p>
+<blockquote>
+<p>还有那么多想做的功能没有实现呢！</p>
+</blockquote>
+<p>其实 AppStore 发版很多时候是可以满足要求的，现在审核的速度也越来越快，基本 1 天左右就能完成。但难免有时候问题影响范围太大，用户的反馈还是会搞得我手忙脚乱，最后也只能看着”Waiting for Review” 干着急。<br>这个时候就会想，如果可以热更新，就不用这样大费周章了。</p>
+<p>所以在近期的版本里，我还是给 Maipo 加入了热更新的机制。</p>
+<a id="more"></a>
+<h2 id="JSPatch"><a href="#JSPatch" class="headerlink" title="JSPatch"></a>JSPatch</h2><p>在众多热更新方案里，JSPatch 是国内比较成熟的一个，执行过程简单直接，自己也在其他生产环境用到过，对其比较熟悉，因此很自然地选择了 JSPatch。</p>
+<p>JSPatch 的具体原理这里不再讨论，如果感兴趣可以移步<a href="https://github.com/bang590/JSPatch/wiki/JSPatch-%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86%E8%AF%A6%E8%A7%A3" target="_blank" rel="noopener">作者的Wiki</a></p>
+<h2 id="投放平台"><a href="#投放平台" class="headerlink" title="投放平台"></a>投放平台</h2><p>最初我也了解了 JSPatch 官方的投放平台，但发现免费的“基础版”服务只可以承载日均一万的请求量，无法满足 Maipo 的要求，而更高请求量需要至少 399元/月 的服务费，这对 Maipo 这样一个免费应用来说有些过于昂贵了。虽然 Maipo 不赚钱，也不能一直赔钱吧，哈哈。</p>
+<p>Maipo 的网站一直架设在 Sina SAE 上，<strong>因此也决定使用 SAE 作为平台，自己实现一套简单的投放策略</strong>。</p>
+<h2 id="投放策略"><a href="#投放策略" class="headerlink" title="投放策略"></a>投放策略</h2><p>既然策略可以自己实现了，就希望能设计得简单高效。回顾了过往遇到的问题之后，结合自己时间精力上的限制，给 Maipo 的热更新投放方案定了一些要求：</p>
+<ul>
+<li>能根据客户端版本下发不同 Patch</li>
+<li>通过静态的配置方式，以减小开发成本</li>
+<li>客户端能够有效缓存下发结果，以减少 SAE 资费</li>
+<li>既然是静态配置，没有办法灰度投放，所以如果 Patch 出现问题，需要能够撤回或者覆盖</li>
+</ul>
+<p>最终 Maipo 的实现方案如下：</p>
+<h3 id="服务端部署"><a href="#服务端部署" class="headerlink" title="服务端部署"></a>服务端部署</h3><p>Patch 文件静态部署在 HTTP 服务上，部署的路径根据规则设置：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">https://www.example.com/rc/&#123;BUNDLE_VERSION_SHORT&#125;/&#123;BUNDLE_VERSION&#125;.config</span><br></pre></td></tr></table></figure>
+<p>例如需要对 Maipo 3.4.0 (18221) 版本投放 Patch 时，将文件上传到以下路径即可</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">https://www.example.com/rc/3.4.0/18221.config</span><br></pre></td></tr></table></figure>
+<p>对于 Patch 本地调试阶段，也设置了一个专用的路径：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">https://www.example.com/rc/debug/debug.config</span><br></pre></td></tr></table></figure>
+<h3 id="客户端加载"><a href="#客户端加载" class="headerlink" title="客户端加载"></a>客户端加载</h3><p>客户端在一些特定的时机，对 Patch 文件进行加载，如：</p>
+<ul>
+<li>应用启动时</li>
+<li>应用从后台被激活，且距离上次加载达到一定时间间隔时</li>
+</ul>
+<p>加载按照部署时的规则进行，如果此版本没有进行 Patch 投放，则服务端会返回 <code>404 Not Found</code>，不会有额外的带宽消耗。</p>
+<p>Patch 加载完成后，调用 JSPatch 的相关 API 执行。</p>
+<h3 id="客户端缓存"><a href="#客户端缓存" class="headerlink" title="客户端缓存"></a>客户端缓存</h3><p><img src="http://wx1.sinaimg.cn/large/69c30c5fly1fo1rkvh4n1j21kw0nd4j8.jpg" alt="Cache Policy"></p>
+<p>Maipo 利用了 HTTP 的原生缓存机制，实现了在服务端文件未变化时，不再重复下载 Patch 文件：</p>
+<ol>
+<li>当客户端下载到 Patch 文件，会将文件缓存到磁盘，同时将 Response Header 中的 <code>Last-Modified</code> 字段内容缓存到另一个文件中</li>
+<li>在下载时，将 <code>Last-Modified</code> 内容作为 Request Header <code>If-Modified-Since</code> 上传</li>
+<li>如果服务端文件有变化，则会响应 <code>200 OK</code> 和具体文件内容；如果没有变化，则响应 <code>304 Not Modified</code>，此时服务端不会下发文件内容了</li>
+</ol>
+<h2 id="中间人攻击"><a href="#中间人攻击" class="headerlink" title="中间人攻击"></a>中间人攻击</h2><p>客户端动态执行代码很强大，但如果被坏人利用，会变得很危险：</p>
+<ul>
+<li>对应用来说，可以轻易通过伪造 Patch，调用到应用中任意代码，造成安全隐患</li>
+<li>对用户来说，如果通过 DNS 劫持等手段伪造 Patch，也会有密码、隐私泄漏等严重的安全问题</li>
+</ul>
+<p>这里的攻击不一定发生在网络传输缓解，由于 macOS 文件系统是开放的，通过简单修改 Patch 缓存，也可以轻易发起攻击。</p>
+<h3 id="RSA-签名校验"><a href="#RSA-签名校验" class="headerlink" title="RSA 签名校验"></a>RSA 签名校验</h3><p>Maipo 为了解决这个问题，给 Patch 加入了签名校验的机制：</p>
+<ul>
+<li>首先生成了 RSA 公私密钥对，其中公钥编码在客户端中，私钥存储在我个人的签名脚本中；</li>
+<li>每次部署前，用签名脚本对 Patch 内容进行签名，将签名结果放在 Patch 文件的第一行</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ openssl dgst -sha256 -sign private_key.pem patch.config</span><br></pre></td></tr></table></figure>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// sign: abcd123</span></span><br><span class="line"></span><br><span class="line">defineClass(...); <span class="comment">// 具体的 Patch 代码</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li>客户端每次执行 Patch 文件时，用公钥对文件第一行之外的内容进行签名校验，只有校验通过，才执行脚本</li>
+</ul>
+<figure class="highlight objc"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 生成 SHA256 Digest</span></span><br><span class="line"><span class="built_in">NSMutableData</span> * digest = [[<span class="built_in">NSMutableData</span> alloc] initWithLength:CC_SHA256_DIGEST_LENGTH];</span><br><span class="line">CC_SHA256([inputData bytes], (CC_LONG)[inputData length], digest.mutableBytes);</span><br><span class="line"></span><br><span class="line"><span class="comment">// 校验 SHA256 与签名是否匹配</span></span><br><span class="line"><span class="keyword">return</span> SecKeyVerifySignature(publicKey, kSecKeyAlgorithmRSASignatureDigestPKCS1v15SHA256, digest, signature, <span class="literal">NULL</span>);</span><br></pre></td></tr></table></figure>
+<p>由于校验发生在 Patch 实际执行之前，所以无论是新下发的还是缓存的 Patch，均无法被其他人篡改。</p>
+<p><img src="http://wx3.sinaimg.cn/large/69c30c5fly1fo1cq5gnf6j21kw0z4nl0.jpg" alt="Anti-MITM"></p>
+<h2 id="覆盖策略"><a href="#覆盖策略" class="headerlink" title="覆盖策略"></a>覆盖策略</h2><p>Maipo 的部署策略非常简单，静态部署的方式暂时无法实现 Patch 的灰度下发，所以对于已经下发的 Patch，需要能够及时覆盖或撤销。</p>
+<p>但对于已经打上 Patch 1 的客户端， Patch 2 能否直接覆盖，是需要视情况而定的，如果对同一个方法重复进行 Patch，可能导致意外的后果。</p>
+<p>因此 Maipo 的 Patch 可以定义自身的覆盖方式，有三种选项：</p>
+<table>
+<thead>
+<tr>
+<th>值</th>
+<th>枚举</th>
+<th>定义</th>
+<th>场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td><code>WaitForNextLaunch</code></td>
+<td>下次启动时才执行</td>
+<td>对时效要求不高，且不希望打扰用户</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>AskForNextLaunch</code></td>
+<td>询问用户是否要重启</td>
+<td>对时效要求高，且不能直接覆盖时</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>Overwrite</code></td>
+<td>直接执行</td>
+<td>对时效要求高，且可以直接覆盖时</td>
+</tr>
+</tbody>
+</table>
+<p>每次投放 Patch 时，我可以根据实际情况进行选择，同样的这种配置也是放在 Patch 的实际内容上方进行下发</p>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// sign: abcd123</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// &lt;MPOMeta&gt; ApplyPolicy:1</span></span><br><span class="line">    </span><br><span class="line">defineClass(...); <span class="comment">// 具体的 Patch 代码</span></span><br></pre></td></tr></table></figure>
+<p>对于撤回 Patch 的场景，服务端将 Patch 直接删除，客户端收到 <code>404 Not Found</code> 之后，会默认以 <code>AskForNextLaunch</code> 方式，提示用户重启客户端。当然如果不希望打扰用户，我也可以选择自定义覆盖策略，下发一个没有实际代码的 Patch 进行覆盖。</p>
+<h2 id="写在最后"><a href="#写在最后" class="headerlink" title="写在最后"></a>写在最后</h2><p>Maipo 的热更新机制其实很简单，只是针对 Maipo 的量级和痛点做的一个轻量级实现，不过也暂时满足了我的需求。</p>
+<p>实际上刚刚上线的 Maipo 3.4.0 版本已经投出了一个 Patch，解决了部分用户无法高级授权的问题。而 SAE 上的资源消耗并没有明显增加，我没有对 Patch 部分单独统计，但观察总体的资源报表，新版本上线投放前后的日均云豆消耗差不到10豆，算下来也就是不到 3元/月。</p>
+<p>看见自己设计的方案 <del>省了这么多钱</del> 能够按预期运行，还是很让人高兴的😄。</p>
+<p>上面写到的几个解决方案也是凭自己的一些经验设计，要是有不足或者漏洞也欢迎一起讨论～</p>
+</div></article></div></main><footer><div class="paginator"><a href="/2018/01/04/Cracking-Facebook-IPA/" class="next">NEXT</a></div><div id="comments"></div><link rel="stylesheet" href="/css/gitment.css"><script src="https://imsun.github.io/gitment/dist/gitment.browser.js"></script><script>var gitment = new Gitment({
+  id: 'Maipo 的热更新机制',
+  owner: 'Naituw',
+  repo: 'BlogComments',
+  oauth: {
+    client_id: '51a7675870901575dec8',
+    client_secret: 'e78aac985023b94bf64346d06cf07a9b2c17774e',
+  },
+})
+gitment.render('comments')</script><div class="copyright"><p>© 2018 <a href="http://naituw.github.io">Wu Tian</a>, powered by <a href="https://hexo.io/" target="_blank">Hexo</a> and <a href="https://github.com/pinggod/hexo-theme-apollo" target="_blank">hexo-theme-apollo</a>.</p></div></footer></div><script async src="//cdn.bootcss.com/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML" integrity="sha384-crwIf/BuaWM9rM65iM+dWFldgQ1Un8jWZMuh3puxb8TOY9+linwLoI7ZHZT+aekW" crossorigin="anonymous"></script></body></html>
